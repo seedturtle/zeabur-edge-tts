@@ -1,7 +1,7 @@
 /**
- * zeabur-edge-tts
- * HTTP proxy for Microsoft Edge TTS
- * Deploy to Zeabur (port 8080)
+ * zeabur-edge-tts v1.0.3
+ * HTTP proxy for Microsoft Edge TTS (edge-tts-universal 1.4.0)
+ * Zeabur port: 8080
  *
  * POST /tts
  * Body: { text: string, voice?: string, rate?: string, pitch?: string }
@@ -10,7 +10,7 @@
 
 import express from 'express';
 import cors from 'cors';
-import { tts } from 'edge-tts';
+import { Communicate } from 'edge-tts-universal';
 
 const app = express();
 app.use(cors());
@@ -18,10 +18,10 @@ app.use(express.json({ limit: '10mb' }));
 
 const DEFAULT_VOICE = 'zh-TW-HsiaoNeural';
 
-app.get('/health', (req, res) => res.json({ status: 'ok', service: 'zeabur-edge-tts' }));
+app.get('/health', (req, res) => res.json({ status: 'ok', version: '1.0.3' }));
 
 app.post('/tts', async (req, res) => {
-  const { text, voice = DEFAULT_VOICE, rate, pitch } = req.body;
+  const { text, voice = DEFAULT_VOICE, rate, pitch, volume } = req.body;
 
   if (!text || typeof text !== 'string' || text.trim().length === 0) {
     return res.status(400).json({ error: 'text is required' });
@@ -30,14 +30,23 @@ app.post('/tts', async (req, res) => {
     return res.status(400).json({ error: 'text too long (max 10000 chars)' });
   }
 
+  const chunks = [];
   try {
     const opts = { voice };
-    if (rate)  opts.rate  = rate;
-    if (pitch) opts.pitch = pitch;
+    if (rate)   opts.rate   = rate;
+    if (pitch)  opts.pitch  = pitch;
+    if (volume) opts.volume = volume;
 
-    const buf = await tts(text.trim(), opts);
+    const tts = new Communicate(text.trim(), opts);
+    for await (const chunk of tts.stream()) {
+      if (chunk.type === 'audio' && chunk.data) {
+        chunks.push(Buffer.from(chunk.data));
+      }
+    }
+
+    const buf = Buffer.concat(chunks);
     if (!buf || buf.length === 0) {
-      return res.status(502).json({ error: 'No audio received' });
+      return res.status(502).json({ error: 'No audio received from Edge TTS' });
     }
 
     res.set('Content-Type', 'audio/mpeg');
@@ -51,7 +60,16 @@ app.post('/tts', async (req, res) => {
   }
 });
 
-const PORT = 8080;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`zeabur-edge-tts listening on port ${PORT}`);
+app.get('/voices', async (req, res) => {
+  try {
+    const voices = await import('edge-tts-universal').then(m => m.listVoicesUniversal());
+    const filtered = voices.filter(v => v.Locale.startsWith('zh'));
+    res.json({ voices: filtered });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+app.listen(8080, '0.0.0.0', () => {
+  console.log('zeabur-edge-tts v1.0.3 listening on 0.0.0.0:8080');
 });
