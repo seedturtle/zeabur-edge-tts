@@ -1,0 +1,16 @@
+{
+  "name": "zeabur-edge-tts",
+  "version": "1.0.0",
+  "description": "Edge TTS HTTP proxy for Zeabur deployment",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "edge-tts-universal": "^1.4.6",
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  }
+}
